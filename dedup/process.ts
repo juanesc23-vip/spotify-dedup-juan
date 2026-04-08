@@ -36,7 +36,11 @@ export default class {
     callbacks.forEach((callback) => callback(params));
   }
 
-  process = async (api: SpotifyWebApi, user: SpotifyCurrentUser) => {
+  process = async (
+    api: SpotifyWebApi, 
+    user: SpotifyCurrentUser,
+    targetPlaylistId?: string
+  ) => {
     let currentState: {
       playlists?: Array<PlaylistModel>;
       savedTracks?: {
@@ -84,20 +88,28 @@ export default class {
       console.error("There was an error fetching user's playlists", e);
     });
 
-    currentState.progress = 10;
-    this.dispatch('updateState', currentState);
-
     playlistsToCheck = ownedPlaylists;
-    currentState.playlists = playlistsToCheck.map((p) =>
-      playlistToPlaylistModel(p)
-    );
+
+if (targetPlaylistId) {
+  playlistsToCheck = playlistsToCheck.filter(
+    (p) => p.id === targetPlaylistId
+  );
+
+  if (playlistsToCheck.length === 0) {
+    throw new Error(`Playlist with ID ${targetPlaylistId} not found`);
+  }
+}
+
+currentState.playlists = playlistsToCheck.map((p) =>
+  playlistToPlaylistModel(p)
+);
     currentState.toProcess =
       currentState.playlists.length + 1 /* saved tracks */;
     currentState.savedTracks = {};
     const savedTracksFirstPage = await api.getMySavedTracks({ limit: 50 });
 
     currentState.totalTracksToDownload = savedTracksFirstPage.total
-      + ownedPlaylists.reduce((acc, current) => acc + current.tracks.total, 0);
+      + playlistsToCheck.reduce((acc, current) => acc + current.tracks.total, 0);
     currentState.totalTracksDownloaded = 0;
 
     const savedTracks = await SavedTracksDeduplicator.getTracks(
